@@ -15,17 +15,39 @@ const interPolate = (data, newMin, newMax) => {
   });
 };
 
-const getTimeData = async (time) => {
+const getMinMaxRange = async (catalogRefID, from, to, variable) => {
+  const { data } = await axios.post(
+    "http://localhost:8082/portuscopia//api/catalog/ncdata/minmax",
+    {
+      catalogRefID,
+      from,
+      to,
+      isMean: false,
+      variable,
+    }
+  );
+  return data;
+};
+
+const getTimeData = async (
+  catalogRefID,
+  date,
+  variable,
+  minValue,
+  maxValue
+) => {
   const { data } = await axios.post(
     "http://localhost:8082/portuscopia//api/catalog/ncdata",
     {
-      catalogRefID: "circulation_coastal_fer",
-      date: `2022-07-21T${time.toString().padStart(2, "0")}:00:00.404Z`,
+      catalogRefID,
+      date,
       isMean: false,
-      variable: "u",
+      variable,
+      minValue,
+      maxValue,
     }
   );
-  return data; //interPolate(data, 0, 100);
+  return data;
 };
 
-export default getTimeData;
+export { getTimeData, getMinMaxRange };

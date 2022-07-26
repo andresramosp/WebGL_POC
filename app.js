@@ -3,12 +3,24 @@ import * as L from "leaflet";
 import { LeafletLayer } from "deck.gl-leaflet";
 import { MapView } from "@deck.gl/core";
 import { HeatmapLayer } from "@deck.gl/aggregation-layers";
-// import times from './points';
-import getTimeData from "./dataService";
+import PaletteService from "./palette.service";
+import { getTimeData, getMinMaxRange } from "./dataService";
+
+////////////
+const buffer = [];
+let catalogRefID = "wave_large_atlmed";
+let variable = "VHM0";
+let minMaxRange = null;
+const today = new Date().addDays(-1);
+const ago = today.addDays(-4);
+const playerDelay = 750;
+const palette = "cirana";
+const hourGap = 1;
+/////////////
 
 const map = L.map(document.getElementById("map"), {
   center: [39, -5.4],
-  zoom: 6,
+  zoom: 3,
 });
 L.tileLayer(
   "http://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -27,20 +39,8 @@ const deckLayer = new LeafletLayer({
 });
 map.addLayer(deckLayer);
 
-let currentTime = 0;
-const buffer = [];
-
 const getLayerTime = async (time) => {
   const data = await getDataFromBuffer(time);
-
-  function hexToRgb(hex) {
-    var bigint = parseInt(hex, 16);
-    var r = (bigint >> 16) & 255;
-    var g = (bigint >> 8) & 255;
-    var b = bigint & 255;
-    let result = [r, g, b, [1]];
-    return result;
-  }
 
   const nextLayer = new HeatmapLayer({
     data,
@@ -51,21 +51,9 @@ const getLayerTime = async (time) => {
     getWeight: (d) => d[2],
     intensity: 1,
     threshold: 0.05,
-    radiusPixels: 30,
+    radiusPixels: 30, // Math.pow(map.getZoom(), 1.5), //30,
     // aggregation: "MEAN",
-    colorRange: [
-      hexToRgb("ff00ff"),
-      hexToRgb("00ffff"),
-      hexToRgb("ffff00"),
-      hexToRgb("ff6400"),
-      hexToRgb("ff3c00"),
-      hexToRgb("ff2800"),
-      hexToRgb("ff1400"),
-      hexToRgb("c80000"),
-      hexToRgb("9b0000"),
-      hexToRgb("460000"),
-      hexToRgb("000000"),
-    ],
+    colorRange: PaletteService.getColorsArray(palette),
     // colorDomain: [0, 200],
     // weightsTextureSize: 1000
   });
@@ -78,36 +66,69 @@ const getDataFromBuffer = async (time) => {
 };
 
 const fillBufferdata = async (time) => {
-  buffer[time] = await getTimeData(time);
+  buffer[time] = await getTimeData(
+    catalogRefID,
+    time,
+    variable,
+    minMaxRange.min,
+    minMaxRange.max
+  );
 };
 
-const fillBuffer = async (min) => {
+const fillBuffer = async (timeArray, minBuffer) => {
   console.log("iniciando buffer...");
   const minPromises = [];
   const remainingPromises = [];
-  for (let time of [0, 1, 2]) {
-    if (time < min) minPromises.push(fillBufferdata(time));
-    else remainingPromises.push(fillBufferdata(time));
+  for (let time of timeArray) {
+    if (timeArray.indexOf(time) < minBuffer)
+      minPromises.push(new Promise((res) => res(fillBufferdata(time))));
+    // else
+    //   remainingPromises.push(new Promise((res) => res(fillBufferdata(time))));
   }
-  Promise.all(remainingPromises).then(() => {
-    console.log("buffer filled!");
-  });
-  await Promise.all(minPromises);
-  console.log("buffer mínimo relleno...");
+  // await Promise.all(minPromises);
+  // console.log("buffer mínimo relleno con ", minPromises.length);
+  // Promise.all(remainingPromises).then(() => {
+  //   console.log("buffer filled!");
+  // });
+};
+
+const getTimeIntervalArray = (dateFrom, dateTo) => {
+  let result = [];
+  let currentDate = new Date(dateFrom);
+  currentDate.setHours(0, 0, 0, 0);
+  let stopDate = dateTo;
+  while (currentDate < stopDate) {
+    result.push(currentDate);
+    currentDate = currentDate.addHours(hourGap);
+  }
+  return result.map((d) => d.toJSON());
 };
 
 const start = async () => {
-  // deckLayer.setProps({ layers: [await getLayerTime(currentTime)] });
+  const timeArray = getTimeIntervalArray(ago, today);
 
-  await fillBuffer(5);
+  minMaxRange = await getMinMaxRange(
+    catalogRefID,
+    timeArray[0],
+    timeArray[timeArray.length - 1],
+    variable
+  );
+
+  let timeIndex = 0;
+
+  // deckLayer.setProps({ layers: [await getLayerTime(timeArray[timeIndex])] });
+
+  // await fillBuffer(timeArray, 5);
   while (true) {
     if (!Window.paused) {
-      deckLayer.setProps({ layers: [await getLayerTime(currentTime)] });
-      currentTime++;
-      if (currentTime > 24) currentTime = 0;
+      const currentDate = timeArray[timeIndex];
+      console.log(currentDate);
+      deckLayer.setProps({ layers: [await getLayerTime(currentDate)] });
+      timeIndex++;
+      if (timeIndex >= timeArray.length) timeIndex = 0;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, playerDelay));
   }
 };
 

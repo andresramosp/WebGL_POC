@@ -22,6 +22,16 @@
       function pause() {
         Window.paused = !Window.paused
       }
+      Date.prototype.addDays = function (days) {
+        var date = new Date(this.valueOf());
+        date.setDate(date.getDate() + days);
+        return date;
+    }
+      Date.prototype.addHours = function (hours) {
+          var date = new Date(this.valueOf());
+          date.setHours(date.getHours() + hours);
+          return date;
+      }
     </script>
     <script src='app.js'></script>
   </body>
