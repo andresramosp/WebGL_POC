@@ -17,11 +17,7 @@
   <body>
     <div id="map"> 
     </div>
-    <button onclick="pause()" style="position: absolute; z-index: 10000; right: 10px">HOLA</button>
     <script>
-      function pause() {
-        Window.paused = !Window.paused
-      }
       Date.prototype.addDays = function (days) {
         var date = new Date(this.valueOf());
         date.setDate(date.getDate() + days);
@@ -33,6 +29,14 @@
           return date;
       }
     </script>
+
+    <button id="back" style="position: absolute; z-index: 10000; right: 100px"><<</button>
+    <button id="pause" style="position: absolute; z-index: 10000; right: 43px; width: 55px">Pause</button>
+    <button id="forward" style="position: absolute; z-index: 10000; right: 10px">>></button>
+    
+
+
     <script src='app.js'></script>
+   
   </body>
 </html>

@@ -12,10 +12,17 @@ let catalogRefID = "wave_large_atlmed";
 let variable = "VHM0";
 let minMaxRange = null;
 const today = new Date().addDays(-1);
-const ago = today.addDays(-4);
+const ago = today.addDays(-3);
 const playerDelay = 750;
-const palette = "cirana";
+const palette = "wave_atl";
 const hourGap = 1;
+
+let paused = false;
+let timeIndex = 0;
+let timeArray = [];
+let radiusPixels = 30;
+let dymanicRadiusPixel = true;
+let radiusFactor = 2;
 /////////////
 
 const map = L.map(document.getElementById("map"), {
@@ -30,6 +37,8 @@ L.tileLayer(
   }
 ).addTo(map);
 
+if (dymanicRadiusPixel) radiusPixels = Math.pow(map.getZoom(), radiusFactor);
+
 const deckLayer = new LeafletLayer({
   views: [
     new MapView({
@@ -40,7 +49,8 @@ const deckLayer = new LeafletLayer({
 map.addLayer(deckLayer);
 
 const getLayerTime = async (time) => {
-  const data = await getDataFromBuffer(time);
+  if (!buffer[time]) await fillBufferdata(time);
+  const data = buffer[time];
 
   const nextLayer = new HeatmapLayer({
     data,
@@ -51,18 +61,14 @@ const getLayerTime = async (time) => {
     getWeight: (d) => d[2],
     intensity: 1,
     threshold: 0.05,
-    radiusPixels: 30, // Math.pow(map.getZoom(), 1.5), //30,
-    // aggregation: "MEAN",
+    radiusPixels, //30,
+    aggregation: "MEAN",
     colorRange: PaletteService.getColorsArray(palette),
-    // colorDomain: [0, 200],
+    colorDomain: [5, 95],
+    // colorDomain: [colorRange.min, colorRange.max],
     // weightsTextureSize: 1000
   });
   return nextLayer;
-};
-
-const getDataFromBuffer = async (time) => {
-  if (!buffer[time]) await fillBufferdata(time);
-  return buffer[time];
 };
 
 const fillBufferdata = async (time) => {
@@ -76,20 +82,23 @@ const fillBufferdata = async (time) => {
 };
 
 const fillBuffer = async (timeArray, minBuffer) => {
-  console.log("iniciando buffer...");
   const minPromises = [];
   const remainingPromises = [];
-  for (let time of timeArray) {
-    if (timeArray.indexOf(time) < minBuffer)
-      minPromises.push(new Promise((res) => res(fillBufferdata(time))));
-    // else
-    //   remainingPromises.push(new Promise((res) => res(fillBufferdata(time))));
+
+  console.log("iniciando buffer mínimo...");
+  for (let time of timeArray.slice(0, minBuffer)) {
+    minPromises.push(fillBufferdata(time));
   }
-  // await Promise.all(minPromises);
-  // console.log("buffer mínimo relleno con ", minPromises.length);
-  // Promise.all(remainingPromises).then(() => {
-  //   console.log("buffer filled!");
-  // });
+  await Promise.all(minPromises);
+  console.log("buffer mínimo relleno con ", minPromises.length);
+
+  console.log("iniciando resto del buffer...");
+  for (let time of timeArray.slice(minBuffer, timeArray.length)) {
+    remainingPromises.push(fillBufferdata(time));
+  }
+  Promise.all(remainingPromises).then(() => {
+    console.log("buffer filled!");
+  });
 };
 
 const getTimeIntervalArray = (dateFrom, dateTo) => {
@@ -105,7 +114,7 @@ const getTimeIntervalArray = (dateFrom, dateTo) => {
 };
 
 const start = async () => {
-  const timeArray = getTimeIntervalArray(ago, today);
+  timeArray = getTimeIntervalArray(ago, today);
 
   minMaxRange = await getMinMaxRange(
     catalogRefID,
@@ -114,13 +123,10 @@ const start = async () => {
     variable
   );
 
-  let timeIndex = 0;
+  await fillBuffer(timeArray, 12);
 
-  // deckLayer.setProps({ layers: [await getLayerTime(timeArray[timeIndex])] });
-
-  // await fillBuffer(timeArray, 5);
   while (true) {
-    if (!Window.paused) {
+    if (!paused) {
       const currentDate = timeArray[timeIndex];
       console.log(currentDate);
       deckLayer.setProps({ layers: [await getLayerTime(currentDate)] });
@@ -130,6 +136,34 @@ const start = async () => {
 
     await new Promise((resolve) => setTimeout(resolve, playerDelay));
   }
+};
+
+map.on("zoomend", async () => {
+  if (dymanicRadiusPixel) {
+    radiusPixels = Math.pow(map.getZoom(), radiusFactor);
+    const currentDate = timeArray[timeIndex];
+    deckLayer.setProps({ layers: [await getLayerTime(currentDate)] });
+    console.log("radious pixel: ", radiusPixels);
+  }
+});
+
+document.getElementById("pause").onclick = () => {
+  paused = !paused;
+  document.getElementById("pause").innerHTML = paused ? "Play" : "Paused";
+};
+
+document.getElementById("back").onclick = async () => {
+  timeIndex--;
+  const currentDate = timeArray[timeIndex];
+  console.log(currentDate);
+  deckLayer.setProps({ layers: [await getLayerTime(currentDate)] });
+};
+
+document.getElementById("forward").onclick = async () => {
+  timeIndex++;
+  const currentDate = timeArray[timeIndex];
+  console.log(currentDate);
+  deckLayer.setProps({ layers: [await getLayerTime(currentDate)] });
 };
 
 start();
