@@ -34,7 +34,9 @@ const getTimeData = async (
   date,
   variable,
   minValue,
-  maxValue
+  maxValue,
+  mapBox,
+  zoom
 ) => {
   const { data } = await axios.post(
     "http://localhost:8082/portuscopia//api/catalog/ncdata",
@@ -45,6 +47,11 @@ const getTimeData = async (
       variable,
       minValue,
       maxValue,
+      viewS: mapBox.getSouth(),
+      viewW: mapBox.getWest(),
+      viewN: mapBox.getNorth(),
+      viewE: mapBox.getEast(),
+      zoom,
     }
   );
   return data;

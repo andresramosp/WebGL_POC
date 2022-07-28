@@ -7,21 +7,21 @@ import PaletteService from "./palette.service";
 import { getTimeData, getMinMaxRange } from "./dataService";
 
 ////////////
-const buffer = [];
-let catalogRefID = "wave_large_atlmed";
-let variable = "VHM0";
+let buffer = [];
+let catalogRefID = "circulation_coastal_alm";
+let variable = "salinity";
 let minMaxRange = null;
 const today = new Date().addDays(-1);
-const ago = today.addDays(-3);
+const ago = today.addDays(-1);
 const playerDelay = 750;
-const palette = "wave_atl";
+const palette = "cirana";
 const hourGap = 1;
 
 let paused = false;
 let timeIndex = 0;
 let timeArray = [];
 let radiusPixels = 30;
-let dymanicRadiusPixel = true;
+let dymanicRadiusPixel = false;
 let radiusFactor = 2;
 /////////////
 
@@ -64,7 +64,7 @@ const getLayerTime = async (time) => {
     radiusPixels, //30,
     aggregation: "MEAN",
     colorRange: PaletteService.getColorsArray(palette),
-    colorDomain: [5, 95],
+    colorDomain: [5, 100],
     // colorDomain: [colorRange.min, colorRange.max],
     // weightsTextureSize: 1000
   });
@@ -72,12 +72,16 @@ const getLayerTime = async (time) => {
 };
 
 const fillBufferdata = async (time) => {
+  let mapBox = map.getBounds().pad(0.2);
+  let zoom = map.getZoom();
   buffer[time] = await getTimeData(
     catalogRefID,
     time,
     variable,
     minMaxRange.min,
-    minMaxRange.max
+    minMaxRange.max,
+    mapBox,
+    zoom
   );
 };
 
@@ -138,13 +142,28 @@ const start = async () => {
   }
 };
 
+let refreshTimeout;
+
+const refreshLayer = () => {
+  clearTimeout(refreshTimeout);
+  refreshTimeout = setTimeout(async () => {
+    buffer = [];
+    const currentDate = timeArray[timeIndex];
+    deckLayer.setProps({ layers: [await getLayerTime(currentDate)] });
+  }, 500);
+};
+
 map.on("zoomend", async () => {
   if (dymanicRadiusPixel) {
     radiusPixels = Math.pow(map.getZoom(), radiusFactor);
-    const currentDate = timeArray[timeIndex];
-    deckLayer.setProps({ layers: [await getLayerTime(currentDate)] });
     console.log("radious pixel: ", radiusPixels);
   }
+  // deckLayer.setProps({ layers: [] });
+  refreshLayer();
+});
+
+map.on("moveend", async () => {
+  refreshLayer();
 });
 
 document.getElementById("pause").onclick = () => {
